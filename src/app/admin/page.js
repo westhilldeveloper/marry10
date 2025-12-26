@@ -1,5 +1,6 @@
 'use client';
-
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 import { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -36,19 +37,11 @@ export default function AdminPanel() {
   const [editingNote, setEditingNote] = useState(null);
 
   useEffect(() => {
-    // Check for existing auth state
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setUser(user);
-        fetchMedia();
-        fetchNotes();
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+    if (user) {
+      fetchMedia();
+      fetchNotes();
+    }
+  }, [user]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -187,54 +180,56 @@ export default function AdminPanel() {
   };
 
   const saveNote = async (e) => {
-    e.preventDefault();
-    if (!noteData.heading || !noteData.description) {
-      alert('Please fill in both heading and description');
-      return;
+  e.preventDefault();
+  if (!noteData.heading || !noteData.description) {
+    alert('Please fill in both heading and description');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    if (editingNote) {
+      // Update existing note
+      console.log('Updating note:', editingNote.id);
+      await updateDoc(doc(db, 'notes', editingNote.id), {
+        heading: noteData.heading,
+        description: noteData.description,
+        order: parseInt(noteData.order) || 0,
+        updatedAt: new Date()
+      });
+      alert('Note updated successfully!');
+    } else {
+      // Create new note
+      console.log('Creating new note');
+      await addDoc(collection(db, 'notes'), {
+        heading: noteData.heading,
+        description: noteData.description,
+        order: parseInt(noteData.order) || 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      alert('Note added successfully!');
     }
 
-    setLoading(true);
-    try {
-      if (editingNote) {
-        // Update existing note
-        await updateDoc(doc(db, 'notes', editingNote.id), {
-          heading: noteData.heading,
-          description: noteData.description,
-          order: parseInt(noteData.order) || 0,
-          updatedAt: new Date()
-        });
-        alert('Note updated successfully!');
-      } else {
-        // Create new note
-        await addDoc(collection(db, 'notes'), {
-          heading: noteData.heading,
-          description: noteData.description,
-          order: parseInt(noteData.order) || 0,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-        alert('Note added successfully!');
-      }
-
-      setNoteData({ heading: '', description: '', order: 0 });
-      setEditingNote(null);
-      fetchNotes();
-    } catch (error) {
-      console.error('Error saving note:', error);
-      
-      // More specific error messages
-      if (error.code === 'permission-denied') {
-        alert('Permission denied. Check your Firestore security rules.');
-      } else if (error.code === 'not-found') {
-        alert('Firestore collection not found.');
-      } else if (error.code === 'unauthenticated') {
-        alert('Please sign in to save notes.');
-      } else {
-        alert(`Failed to save note: ${error.message}`);
-      }
+    setNoteData({ heading: '', description: '', order: 0 });
+    setEditingNote(null);
+    fetchNotes();
+  } catch (error) {
+    console.error('Error saving note:', error);
+    
+    // More specific error messages
+    if (error.code === 'permission-denied') {
+      alert('Permission denied. Check your Firestore security rules.');
+    } else if (error.code === 'not-found') {
+      alert('Firestore collection not found.');
+    } else if (error.code === 'unauthenticated') {
+      alert('Please sign in to save notes.');
+    } else {
+      alert(`Failed to save note: ${error.message}`);
     }
-    setLoading(false);
-  };
+  }
+  setLoading(false);
+};
 
   const editNote = (note) => {
     setEditingNote(note);
